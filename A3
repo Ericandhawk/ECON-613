@@ -1,0 +1,208 @@
+library(readr)
+library(tidyverse)
+library(data.table)
+library(ggplot2)
+library(fastDummies)
+library(nnet)
+
+# Import Datasets
+datjss <- read_csv("A3/Data/datjss.csv")
+datsss <- read_csv("A3/Data/datsss.csv")
+datstu <- read_csv("A3/Data/datstu_v2.csv")
+datstu <- subset(datstu,score!='NA'&rankplace!='NA')
+datsss <- subset(datsss,schoolname!='NA')
+datsss <- datsss %>% distinct(schoolcode,.keep_all = TRUE)
+  
+#Exercise 1
+Nstudent <- nrow(datstu)
+Nschool  <- n_distinct(datsss$schoolcode)
+programs <- c(datstu$choicepgm1,datstu$choicepgm2,datstu$choicepgm3,datstu$choicepgm4,datstu$choicepgm5,datstu$choicepgm6)
+programs <- na.omit(programs)
+Nprogram <- n_distinct(programs)
+
+Ldatstu <- datstu %>% gather('schoolcode1':'schoolcode6', key = 'school', value = 'schoice')
+Ldatstu <- Ldatstu %>% gather('choicepgm1':'choicepgm6', key = 'pgm', value = 'pchoice')
+Ldatstu$school <- str_sub(Ldatstu$school, start = 11, end = 11)
+Ldatstu$school <- as.numeric(Ldatstu$school)
+Ldatstu$pgm <- str_sub(Ldatstu$pgm, start = 10, end = 10)
+Ldatstu$pgm <- as.numeric(Ldatstu$pgm)
+Ldatstu_matching <- subset(Ldatstu,Ldatstu$school==Ldatstu$pgm&Ldatstu$schoice!='NA'&Ldatstu$pchoice!='NA')
+Nchoice  <- nrow(unique(Ldatstu_matching[c('schoice','pchoice')]))
+
+Ldatstu_matching_sss <- Ldatstu_matching %>% rename(schoolcode=schoice)
+Ldatstu_matching_sss <- merge(Ldatstu_matching_sss,datsss,by="schoolcode")
+datasame <- Ldatstu_matching_sss %>% group_by(V1.x) %>% summarise(same = jssdistrict[1] %in% sssdistrict)
+datasame$same <- as.numeric(datasame$same)
+Nsame <- sum(datasame$same)
+
+Ldatstu_matching_sss_admit <- subset(Ldatstu_matching_sss,rankplace!=99)
+Ldatstu_matching_sss_admit <- subset(Ldatstu_matching_sss_admit,rankplace==school)
+Nadmit <- data.frame(table(Ldatstu_matching_sss_admit$schoolcode))
+Nadmit <- Nadmit %>% rename(schoolcode=Var1)
+Nadmit <- Nadmit %>% rename(Nadmit=Freq)
+
+lowscore <- Ldatstu_matching_sss_admit %>% group_by(schoolcode) %>% summarise(minscore=min(score))
+
+quality  <- Ldatstu_matching_sss_admit %>% group_by(schoolcode) %>% summarise(meanscore=mean(score))
+
+#Exercise 2
+Ldatstu_matching_sss_admit$choice <- paste(Ldatstu_matching_sss_admit$schoolcode,Ldatstu_matching_sss_admit$pchoice,sep = ' ')
+Ncadmit   <- data.frame(table(Ldatstu_matching_sss_admit$choice))
+Ncadmit   <- Ncadmit %>% rename(choice=Var1)
+Ncadmit   <- Ncadmit %>% rename(people=Freq)
+clowscore <- Ldatstu_matching_sss_admit %>% group_by(choice) %>% summarise(minscore=min(score))
+cquality  <- Ldatstu_matching_sss_admit %>% group_by(choice) %>% summarise(meanscore=mean(score))
+
+schooldata <- unique(Ldatstu_matching_sss_admit[c('schoolcode','pchoice')])
+schooldata$choice <- paste(schooldata$schoolcode,schooldata$pchoice,sep = ' ')
+schooldata <- merge(datsss,schooldata,by='schoolcode')
+schooldata <- merge(schooldata,Ncadmit,by='choice')
+schooldata <- merge(schooldata,clowscore,by='choice')
+schooldata <- merge(schooldata,cquality,by='choice')
+schooldataf <-data.frame(unique(Ldatstu_matching[c('schoice','pchoice')]))
+schooldataf$choice <- paste(schooldataf$schoice,schooldataf$pchoice,sep = ' ')
+schooldataf <- schooldataf %>% rename(schoolcode=schoice)
+schooldataf <- merge(schooldataf,datsss,by='schoolcode')
+schooldata1 <- left_join(schooldataf,schooldata,by='choice')
+schooldata  <- subset(schooldata1,select = -c(9:15))
+schooldata  <- schooldata[is.na(schooldata)] <- 0
+
+#Exercise 3
+Ldatstu_matching_sss_jss <- merge(Ldatstu_matching_sss,datjss,by='jssdistrict')
+Ldatstu_matching_sss_jss <- Ldatstu_matching_sss_jss  %>% rename(jsslong = point_x)
+Ldatstu_matching_sss_jss <- Ldatstu_matching_sss_jss  %>% rename(jsslat  = point_y)
+attach(Ldatstu_matching_sss_jss)
+Ldatstu_matching_sss_jss$distance <- sqrt((69.172 * (ssslong-jsslong) * cos(jsslat/57.3))^2 + (69.172 * (ssslat-jsslat))^2)
+detach(Ldatstu_matching_sss_jss)
+
+#Exercise 4
+Ldatstu_matching_sss_jss$scode_rev <- str_sub(Ldatstu_matching_sss_jss$schoolcode, start = 1, end = 3)
+Ldatstu_matching_sss_jss$pchoice <- as_factor(Ldatstu_matching_sss_jss$pchoice) 
+Ldatstu_matching_sss_jss$pgm_rev <- Ldatstu_matching_sss_jss$pchoice %>% fct_collapse(arts = c("General Arts","Visual Arts"),economics = c("Business","Home Economics"),science="General Science",other_level = 'others')
+levels(Ldatstu_matching_sss_jss$pgm_rev)
+
+Ldatstu_matching_sss_jss$choice_rev <- paste(Ldatstu_matching_sss_jss$scode_rev,Ldatstu_matching_sss_jss$pgm_rev,sep = ' ')
+ 
+
+lowscore_rev <- Ldatstu_matching_sss_jss %>% group_by(choice_rev) %>% summarise(minscore=min(score))
+quality_rev  <- Ldatstu_matching_sss_jss %>% group_by(choice_rev) %>% summarise(meanscore=mean(score))
+quality_rev$choice_rev <- as.factor(quality_rev$choice_rev)
+quality_rev$choice_rev <- as.numeric(quality_rev$choice_rev)
+
+#Exercise 5 
+Ldatstu_matching_sss_jss_first <- subset(Ldatstu_matching_sss_jss,school==1)
+Ldatstu_matching_sss_jss_first$choice_rev <- as.factor(Ldatstu_matching_sss_jss_first$choice_rev)
+Ldatstu_matching_sss_jss_first$choice_rev <- as.numeric(Ldatstu_matching_sss_jss_first$choice_rev)
+mlogit_like_fun = function(param,data)
+{
+  score      =  data$score
+  ch         =  data$choice_rev
+  ni = nrow(data)
+  nj = length(unique(data[,22]))
+  ut = mat.or.vec(ni,nj)
+  # multinomial logit
+  pn1 = param[1:nj]
+  pn2 = param[(nj+1):(2*nj)]
+  for (j in 1:nj)
+  {
+    ut[,j] = pn1[j] + score*pn2[j]
+  }
+  prob  = exp(ut)       
+  prob  = sweep(prob,MARGIN=1,FUN="/",STATS=rowSums(prob))
+  # match prob to actual choices
+  probc = NULL
+  for (i in 1:ni)
+  {
+    probc[i] = prob[i,ch[i]]
+  }
+  probc[probc>0.999999] = 0.999999
+  probc[probc<0.000001] = 0.000001
+  like = sum(log(probc))
+  return(-like)
+}
+
+
+x <-sample(1:nrow(Ldatstu_matching_sss_jss_first),100)
+sample <- Ldatstu_matching_sss_jss_first[x,]
+sample$choice_rev<-as.factor(sample$choice_rev)
+sample$choice_rev<-as.numeric(sample$choice_rev)
+unique(sample[,22])
+m <-length(unique(sample[,22]))
+
+
+mymodel = multinom(choice_rev~score,data=sample)
+reg = summary(mymodel)
+reg$coefficients
+
+
+start1 = runif(m*2,0,1)
+res    = optim(start1,fn=mlogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=sample,hessian=TRUE)
+
+choice_rev <- c(1:73)
+c_constant <- res$par[1:73]
+c_score <- res$par[74:146]
+vector_prob <- c_constant + sample$score*c_score
+
+
+aa <- data.frame(cbind(choice_rev,c_constant))
+bb <- data.frame(cbind(choice_rev,c_score))
+
+sample <- merge(sample,aa,by='choice_rev')
+sample <- merge(sample,bb,by='choice_rev')
+
+sample$prob <- sample$c_constant + sample$c_score*sample$score
+sample$prob <- exp(sample$prob)
+sample$prob <- sample$prob/sum(sample$prob)
+sample$beta_i_bar <- sum(sample$c_score*sample$prob)
+sample$me <- sample$prob*(sample$c_score-sample$beta_i_bar)
+
+#Exercise 6 
+Ldatstu_matching_sss_jss_first1 <- merge(Ldatstu_matching_sss_jss_first,quality_rev,by='choice_rev') 
+clogit_like_fun = function(param,data){
+  quality     =  data$meanscore
+  ch          =  data$choice_rev
+  ni = nrow(data)
+  nj = length(unique(data[,1]))
+  ut = mat.or.vec(ni,nj)
+  # conditional logit
+  for (j in 1:nj)
+  {
+    ut[,j] = param[1] + param[2]*quality[j]  
+  }
+  prob  = exp(ut)       
+  prob  = sweep(prob,MARGIN=1,FUN="/",STATS=rowSums(prob))
+  # match prob to actual choices
+  probc = NULL
+  for (i in 1:ni)
+  {
+    probc[i] = prob[i,ch[i]]
+  }
+  probc[probc>0.999999] = 0.999999
+  probc[probc<0.000001] = 0.000001
+  like = sum(log(probc))
+  return(-like)
+}
+
+matrix_prob <-  param[1] + param[2]*quality[j]
+
+
+y <-sample(1:nrow(Ldatstu_matching_sss_jss_first1),100)
+sample1 <- Ldatstu_matching_sss_jss_first1[y,]
+sample1$choice_rev<-as.factor(sample1$choice_rev)
+sample1$choice_rev<-as.numeric(sample1$choice_rev)
+unique(sample1[,1])
+m1 <-length(unique(sample1[,1]))
+
+mymodel2 = clogit(choice_rev~meanscore+strata(V1.x),data=sample1)
+reg2 = summary(mymodel2)
+reg2$coefficients
+
+start2 = runif(2,0,1)
+res1    = optim(start2,fn=clogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=sample1,hessian=TRUE)
+
+
+#Exercise 7
+
+
+
+  
