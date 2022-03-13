@@ -190,17 +190,33 @@ y <-sample(1:nrow(Ldatstu_matching_sss_jss_first1),100)
 sample1 <- Ldatstu_matching_sss_jss_first1[y,]
 sample1$choice_rev<-as.factor(sample1$choice_rev)
 sample1$choice_rev<-as.numeric(sample1$choice_rev)
-unique(sample1[,1])
 m1 <-length(unique(sample1[,1]))
-
-mymodel2 = clogit(choice_rev~meanscore+strata(V1.x),data=sample1)
-reg2 = summary(mymodel2)
-reg2$coefficients
 
 start2 = runif(2,0,1)
 res1    = optim(start2,fn=clogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=sample1,hessian=TRUE)
 
+sample1$constant <- res1$par[1]
+sample1$quality  <- res1$par[2]
 
+sample1$prob <- sample1$constant + sample1$quality*sample1$meanscore
+sample1$prob <- exp(sample1$prob)
+sample1$prob <- sample1$prob/sum(sample1$prob)
+n_distinct(sample1$prob)
+probc1 <- unique(sample1$prob)
+beta <- res1$par[2]
+ME <- mat.or.vec(62,62)
+
+for (i in probc1) {
+  for (j in probc1) {
+    a <- which(probc1 == i)
+    b <- which(probc1 == j)
+    if (a==b){
+      ME[a,b]<-i*(1-i)*beta
+    }
+    else{
+      ME[a,b]<-i*(-1)*j*beta}
+  }
+}
 #Exercise 7
 
 
