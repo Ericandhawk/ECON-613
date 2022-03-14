@@ -1,8 +1,7 @@
 library(readr)
 library(tidyverse)
 library(data.table)
-library(ggplot2)
-library(fastDummies)
+library(dply)
 library(nnet)
 
 # Import Datasets
@@ -89,10 +88,14 @@ quality_rev  <- Ldatstu_matching_sss_jss %>% group_by(choice_rev) %>% summarise(
 quality_rev$choice_rev <- as.factor(quality_rev$choice_rev)
 quality_rev$choice_rev <- as.numeric(quality_rev$choice_rev)
 
+
 #Exercise 5 
 Ldatstu_matching_sss_jss_first <- subset(Ldatstu_matching_sss_jss,school==1)
-Ldatstu_matching_sss_jss_first$choice_rev <- as.factor(Ldatstu_matching_sss_jss_first$choice_rev)
-Ldatstu_matching_sss_jss_first$choice_rev <- as.numeric(Ldatstu_matching_sss_jss_first$choice_rev)
+Ldatstu_matching_sss_jss_first_high <- Ldatstu_matching_sss_jss_first[order(Ldatstu_matching_sss_jss_first$score,decreasing = TRUE), ] 
+sample <- Ldatstu_matching_sss_jss_first_high[1:20000,]
+sample$choice_rev <- as.factor(sample$choice_rev)
+sample$choice_rev <- as.numeric(sample$choice_rev)
+
 mlogit_like_fun = function(param,data)
 {
   score      =  data$score
@@ -121,26 +124,14 @@ mlogit_like_fun = function(param,data)
   return(-like)
 }
 
-
-x <-sample(1:nrow(Ldatstu_matching_sss_jss_first),100)
-sample <- Ldatstu_matching_sss_jss_first[x,]
-sample$choice_rev<-as.factor(sample$choice_rev)
-sample$choice_rev<-as.numeric(sample$choice_rev)
-unique(sample[,22])
 m <-length(unique(sample[,22]))
 
-
-mymodel = multinom(choice_rev~score,data=sample)
-reg = summary(mymodel)
-reg$coefficients
-
-
 start1 = runif(m*2,0,1)
-res    = optim(start1,fn=mlogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=sample,hessian=TRUE)
+res1    = optim(start1,fn=mlogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=sample,hessian=TRUE)
 
-choice_rev <- c(1:73)
-c_constant <- res$par[1:73]
-c_score <- res$par[74:146]
+choice_rev <- c(1:m)
+c_constant <- res$par[1:m]
+c_score <- res$par[m+1:2*m]
 vector_prob <- c_constant + sample$score*c_score
 
 
@@ -157,7 +148,7 @@ sample$beta_i_bar <- sum(sample$c_score*sample$prob)
 sample$me <- sample$prob*(sample$c_score-sample$beta_i_bar)
 
 #Exercise 6 
-Ldatstu_matching_sss_jss_first1 <- merge(Ldatstu_matching_sss_jss_first,quality_rev,by='choice_rev') 
+sample_clogit <- merge(sample,quality_rev,by='choice_rev') 
 clogit_like_fun = function(param,data){
   quality     =  data$meanscore
   ch          =  data$choice_rev
@@ -183,28 +174,21 @@ clogit_like_fun = function(param,data){
   return(-like)
 }
 
-matrix_prob <-  param[1] + param[2]*quality[j]
-
-
-y <-sample(1:nrow(Ldatstu_matching_sss_jss_first1),100)
-sample1 <- Ldatstu_matching_sss_jss_first1[y,]
-sample1$choice_rev<-as.factor(sample1$choice_rev)
-sample1$choice_rev<-as.numeric(sample1$choice_rev)
-m1 <-length(unique(sample1[,1]))
+n <-length(unique(sample_clogit[,1]))
 
 start2 = runif(2,0,1)
-res1    = optim(start2,fn=clogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=sample1,hessian=TRUE)
+res2   = optim(start2,fn=clogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=sample_clogit,hessian=TRUE)
 
-sample1$constant <- res1$par[1]
-sample1$quality  <- res1$par[2]
+sample_clogit$constant <- res2$par[1]
+sample_clogit$quality  <- res2$par[2]
 
-sample1$prob <- sample1$constant + sample1$quality*sample1$meanscore
-sample1$prob <- exp(sample1$prob)
-sample1$prob <- sample1$prob/sum(sample1$prob)
-n_distinct(sample1$prob)
-probc1 <- unique(sample1$prob)
-beta <- res1$par[2]
-ME <- mat.or.vec(62,62)
+sample_clogit$prob <- sample_clogit$constant + sample_clogit$quality*sample_clogit$meanscore
+sample_clogit$prob <- exp(sample_clogit$prob)
+sample_clogit$prob <- sample_clogit$prob/sum(sample_clogit$prob)
+n_distinct(sample_clogit$prob)
+probc1 <- unique(sample_clogit$prob)
+beta <- res2$par[2]
+ME <- mat.or.vec(n,n)
 
 for (i in probc1) {
   for (j in probc1) {
