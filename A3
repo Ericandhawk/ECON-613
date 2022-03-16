@@ -102,13 +102,15 @@ mlogit_like_fun = function(param,data)
   ch         =  data$choice_rev
   ni = nrow(data)
   nj = length(unique(data[,22]))
+  nj_par = nj-1
   ut = mat.or.vec(ni,nj)
   # multinomial logit
-  pn1 = param[1:nj]
-  pn2 = param[(nj+1):(2*nj)]
-  for (j in 1:nj)
+  pn1 = param[1:nj_par]
+  pn2 = param[(nj_par+1):(2*nj_par)]
+  ut[,1]<-rep(0,ni)
+  for (j in 2:nj)
   {
-    ut[,j] = pn1[j] + score*pn2[j]
+    ut[,j] = pn1[j-1] + score*pn2[j-1]
   }
   prob  = exp(ut)       
   prob  = sweep(prob,MARGIN=1,FUN="/",STATS=rowSums(prob))
@@ -126,8 +128,12 @@ mlogit_like_fun = function(param,data)
 
 m <-length(unique(sample[,22]))
 
-start1 = runif(m*2,0,1)
-res1    = optim(start1,fn=mlogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=sample,hessian=TRUE)
+
+multinom_model <- multinom(choice_rev~score,data=sample,maxit=10000)
+
+
+start1 = runif((m-1)*2,-0.001,0.001)
+res1   = optim(start1,fn=mlogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=sample,hessian=TRUE)
 
 choice_rev <- c(1:m)
 c_constant <- res$par[1:m]
