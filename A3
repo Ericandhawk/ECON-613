@@ -3,7 +3,8 @@ library(tidyverse)
 library(data.table)
 library(dply)
 library(nnet)
-
+library(mlogit)
+setwd("D:/ECON 613")
 # Import Datasets
 datjss <- read_csv("A3/Data/datjss.csv")
 datsss <- read_csv("A3/Data/datsss.csv")
@@ -95,6 +96,45 @@ Ldatstu_matching_sss_jss_first_high <- Ldatstu_matching_sss_jss_first[order(Ldat
 sample <- Ldatstu_matching_sss_jss_first_high[1:20000,]
 sample$choice_rev <- as.factor(sample$choice_rev)
 sample$choice_rev <- as.numeric(sample$choice_rev)
+Nchoice_sample <- n_distinct(sample$choice_rev)
+
+x <- sample(1:nrow(sample),100)
+small_sample <- sample[x,]
+small_sample$choice_rev <- as.factor(small_sample$choice_rev)
+small_sample$choice_rev <- as.numeric(small_sample$choice_rev)
+
+#choice matrix
+ni=nrow(small_sample)
+nj=length(unique(small_sample[,22])) #41 choices
+Y=matrix(0, ni,nj)
+for(i in 1:nj){
+  for(j in 1:ni){
+    if(small_sample$choice[j]==i){
+      Y[j,i]=1
+    }
+  }
+}
+p=as.matrix(small_sample[,4],ncol=1)#score
+#Likelihood Function
+mlike=function(x,beta) {
+  coef=exp(matrix(rep(c(0,beta[1:36]),nrow(x)),byrow=TRUE,nrow(x))+t(apply(x,1,function(x)x*c(0,beta[37:72]))))
+  coef_sum=apply(coef,1,sum)
+  return(coef/coef_sum)
+}
+
+mllike=function(y,x,beta) {
+  lprob=log(mlike(x,beta))
+  return(-sum(Y*lprob))
+}
+#optimization
+start1 <- rnorm(36,10.8,8.9)
+start2 <- rnorm(36,-0.03,0.02)
+start  <- c(start1,start2)
+model2=optim(function(beta) mllike(y=y,x=p,b=beta),par=start,method="BFGS")
+cbind(model2$par[1:36],model2$par[37:72])
+package_res=multinom(choice_rev~score,data=small_sample,maxit=3000)
+sum <- summary(package_res)
+
 
 mlogit_like_fun = function(param,data)
 {
@@ -126,14 +166,18 @@ mlogit_like_fun = function(param,data)
   return(-like)
 }
 
-m <-length(unique(sample[,22]))
 
 
-multinom_model <- multinom(choice_rev~score,data=sample,maxit=10000)
+m <- n_distinct(small_sample$choice_rev)
 
 
-start1 = runif((m-1)*2,-0.001,0.001)
-res1   = optim(start1,fn=mlogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=sample,hessian=TRUE)
+multinom_model <- multinom(choice_rev~score,data=small_sample,maxit=10000)
+sum <- summary(multinom_model)
+
+start3 = runif((m-1),-100,250)
+start4 = runif((m-1),-0.001,0.001)
+start5  = c(start1,start2)
+res1   = optim(start,fn=mlogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=small_sample,hessian=TRUE)
 
 choice_rev <- c(1:m)
 c_constant <- res$par[1:m]
