@@ -6,6 +6,7 @@ library(data.table)
 library(dplyr)
 library(nnet)
 library(mlogit)
+library(survival)
 getwd()
 setwd('Downloads/Data')
 setwd('D:/ECON 613/A3/Data')
@@ -154,6 +155,7 @@ res1    = optim(start,fn=mlogit_like_fun,method="BFGS",control=list(trace=6,REPO
 par_m   = res1$par
 
 #Marginal Effect
+  #People-Choice Matrix
 prob_matrix <- mat.or.vec(100,m)
 prob_matrix[,1] <- rep(0,100)
 par_constant<-par_m[1:39]
@@ -164,22 +166,20 @@ for (j in 2:m){
 prob_matrix <- exp(prob_matrix)
 prob_matrix <- sweep(prob_matrix,MARGIN=1,FUN="/",STATS=rowSums(prob_matrix))
 colnames(prob_matrix) <- c(1:m)
+  #Match Pij
 small_sample$probc<-0
 for (i in 1:100){
   small_sample$probc[i] = prob_matrix[i,small_sample$choice_rev[i]]
 }
-small_sample$probc[small_sample$probc>0.999999] = 0.999999
-small_sample$probc[small_sample$probc<0.000001] = 0.000001
-
+  #Match coefficients
 choice_rev  <- c(1:m)
 c_constant  <- c(0,par_m[1:m-1])
 c_score     <- c(0,par_m[m:78])
-
 aa <- data.frame(cbind(choice_rev,c_constant))
 bb <- data.frame(cbind(choice_rev,c_score))
-
 small_sample <- merge(small_sample,aa,by='choice_rev')
 small_sample <- merge(small_sample,bb,by='choice_rev')
+  #Computation by formula
 small_sample$beta_i_bar <- sum(small_sample$c_score * small_sample$probc)
 small_sample$me <- small_sample$probc*(small_sample$c_score - small_sample$beta_i_bar)
 package_me <- marginal_effects(multinom_model)
@@ -196,7 +196,7 @@ clogit_like_fun = function(param,data){
   pn1 = c(0,param[1:nj-1])
   for (j in 1:nj)
   {
-    ut[,j] = pn1[1] + param[nj]*quality[j]  
+    ut[,j] = pn1[j] + param[nj]*quality 
   }
   prob  = exp(ut)       
   prob  = sweep(prob,MARGIN=1,FUN="/",STATS=rowSums(prob))
@@ -213,32 +213,40 @@ clogit_like_fun = function(param,data){
 }
 
 #Package Results
-clogit_model <- mclogit(choice_rev~meanscore,data=small_sample_clogit)
+clogit_model <- clogit(choice_rev~meanscore+strata(V1.x),data=small_sample_clogit)
 
-start2 = runif(2,0,1)
-res2   = optim(start2,fn=clogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=sample_clogit,hessian=TRUE)
+#Optimization
+start_2 = runif(m,0,1)
+res2    = optim(start_2,fn=clogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=small_sample_clogit,hessian=TRUE)
+res2$par
 
-sample_clogit$constant <- res2$par[1]
-sample_clogit$quality  <- res2$par[2]
+co_constant <- c(0,res2$par[1:39])
+co_quality  <- res2$par[40]
 
 # Marginal Effects for Conditional Logit
-sample_clogit$prob <- sample_clogit$constant + sample_clogit$quality*sample_clogit$meanscore
-sample_clogit$prob <- exp(sample_clogit$prob)
-sample_clogit$prob <- sample_clogit$prob/sum(sample_clogit$prob)
-n_distinct(sample_clogit$prob)
-probc1 <- unique(sample_clogit$prob)
-beta <- res2$par[2]
-ME <- mat.or.vec(n,n)
+prob_matrix_c <- mat.or.vec(100,m)
+for (j in 1:m){
+  prob_matrix_c[,j] = co_constant[j] +  co_quality * small_sample_clogit$meanscore
+}
+prob_matrix_c <- exp(prob_matrix_c)
+prob_matrix_c <- sweep(prob_matrix_c,MARGIN=1,FUN="/",STATS=rowSums(prob_matrix_c))
+ 
+small_sample_clogit$probc<-0
+for (i in 1:100){
+  small_sample_clogit$probc[i] = prob_matrix_c[i,small_sample_clogit$choice_rev[i]]
+}
 
-for (i in probc1) {
-  for (j in probc1) {
-    a <- which(probc1 == i)
-    b <- which(probc1 == j)
-    if (a==b){
-      ME[a,b]<-i*(1-i)*beta
+probc1 <- unique(small_sample_clogit$probc)
+beta <- res2$par[40]
+ME <- mat.or.vec(m,m)
+
+for (i in 1:40) {
+  for (j in 1:40) {
+    if (i==j){
+      ME[i,j]<-probc1[i]*(1-probc1[i])*beta
     }
     else{
-      ME[a,b]<-i*(-1)*j*beta}
+      ME[i,j]<-probc1[i]*(-1)*probc1[j]*beta}
   }
 }
 #Exercise 7
