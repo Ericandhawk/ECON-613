@@ -6,7 +6,9 @@ library(data.table)
 library(dplyr)
 library(nnet)
 library(mlogit)
+getwd()
 setwd('Downloads/Data')
+setwd('D:/ECON 613/A3/Data')
 # Import Datasets
 datjss <- read_csv("datjss.csv")
 datsss <- read_csv("datsss.csv")
@@ -91,7 +93,6 @@ quality_rev  <- Ldatstu_matching_sss_jss %>% group_by(choice_rev) %>% summarise(
 quality_rev$choice_rev <- as.factor(quality_rev$choice_rev)
 quality_rev$choice_rev <- as.numeric(quality_rev$choice_rev)
 
-
 #Exercise 5 
 Ldatstu_matching_sss_jss_first <- subset(Ldatstu_matching_sss_jss,school==1)
 Ldatstu_matching_sss_jss_first_high <- Ldatstu_matching_sss_jss_first[order(Ldatstu_matching_sss_jss_first$score,decreasing = TRUE), ] 
@@ -146,11 +147,12 @@ start_ideal <- c(sum$coefficients[,1],sum$coefficients[,2])
 marginal_effects(multinom_model)
 
 #Choose Starting Value
-start_1 = runif((m-1),-100,250)
-start_2 = runif((m-1),-0.001,0.001)
-start   = c(start_1,start_2)
-res1    = optim(start_ideal,fn=mlogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=small_sample,hessian=TRUE)
+set.seed(123)
+noise   = rnorm(78,0,0.05)
+start   = c(start_ideal,noise)
+res1    = optim(start,fn=mlogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=small_sample,hessian=TRUE)
 par_m   = res1$par
+
 #Marginal Effect
 prob_matrix <- mat.or.vec(100,m)
 prob_matrix[,1] <- rep(0,100)
@@ -180,8 +182,8 @@ small_sample <- merge(small_sample,aa,by='choice_rev')
 small_sample <- merge(small_sample,bb,by='choice_rev')
 small_sample$beta_i_bar <- sum(small_sample$c_score * small_sample$probc)
 small_sample$me <- small_sample$probc*(small_sample$c_score - small_sample$beta_i_bar)
+package_me <- marginal_effects(multinom_model)
 
-marginal_effects()
 #Exercise 6 
 small_sample_clogit <- merge(small_sample,quality_rev,by='choice_rev') 
 clogit_like_fun = function(param,data){
@@ -191,9 +193,10 @@ clogit_like_fun = function(param,data){
   nj = length(unique(data[,1]))
   ut = mat.or.vec(ni,nj)
   # conditional logit
+  pn1 = c(0,param[1:nj-1])
   for (j in 1:nj)
   {
-    ut[,j] = param[1] + param[2]*quality[j]  
+    ut[,j] = pn1[1] + param[nj]*quality[j]  
   }
   prob  = exp(ut)       
   prob  = sweep(prob,MARGIN=1,FUN="/",STATS=rowSums(prob))
@@ -209,7 +212,8 @@ clogit_like_fun = function(param,data){
   return(-like)
 }
 
-n <-n_distinct(small_sample_clogit[,1])
+#Package Results
+clogit_model <- mclogit(choice_rev~meanscore,data=small_sample_clogit)
 
 start2 = runif(2,0,1)
 res2   = optim(start2,fn=clogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=sample_clogit,hessian=TRUE)
@@ -217,6 +221,7 @@ res2   = optim(start2,fn=clogit_like_fun,method="BFGS",control=list(trace=6,REPO
 sample_clogit$constant <- res2$par[1]
 sample_clogit$quality  <- res2$par[2]
 
+# Marginal Effects for Conditional Logit
 sample_clogit$prob <- sample_clogit$constant + sample_clogit$quality*sample_clogit$meanscore
 sample_clogit$prob <- exp(sample_clogit$prob)
 sample_clogit$prob <- sample_clogit$prob/sum(sample_clogit$prob)
@@ -237,6 +242,5 @@ for (i in probc1) {
   }
 }
 #Exercise 7
-
 
 
