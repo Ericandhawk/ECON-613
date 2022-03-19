@@ -10,21 +10,26 @@ library(survival)
 getwd()
 setwd('Downloads/Data')
 setwd('D:/ECON 613/A3/Data')
-# Import Datasets
+#============================================================================================
+# Import Dataset
+#============================================================================================
 datjss <- read_csv("datjss.csv")
 datsss <- read_csv("datsss.csv")
 datstu <- read_csv("datstu_v2.csv")
 datstu <- subset(datstu,score!='NA'&rankplace!='NA')
 datsss <- subset(datsss,schoolname!='NA')
 datsss <- datsss %>% distinct(schoolcode,.keep_all = TRUE)
-
+#============================================================================================
 #Exercise 1
-Nstudent <- nrow(datstu)
+#============================================================================================
+#Numer of students, school, programs
+Nstudent <- nrow(datstu) 
 Nschool  <- n_distinct(datsss$schoolcode)
 programs <- c(datstu$choicepgm1,datstu$choicepgm2,datstu$choicepgm3,datstu$choicepgm4,datstu$choicepgm5,datstu$choicepgm6)
 programs <- na.omit(programs)
-Nprogram <- n_distinct(programs)
+Nprogram <- n_distinct(programs) 
 
+#Number of choice
 Ldatstu <- datstu %>% gather('schoolcode1':'schoolcode6', key = 'school', value = 'schoice')
 Ldatstu <- Ldatstu %>% gather('choicepgm1':'choicepgm6', key = 'pgm', value = 'pchoice')
 Ldatstu$school <- str_sub(Ldatstu$school, start = 11, end = 11)
@@ -34,23 +39,28 @@ Ldatstu$pgm <- as.numeric(Ldatstu$pgm)
 Ldatstu_matching <- subset(Ldatstu,Ldatstu$school==Ldatstu$pgm&Ldatstu$schoice!='NA'&Ldatstu$pchoice!='NA')
 Nchoice  <- nrow(unique(Ldatstu_matching[c('schoice','pchoice')]))
 
+#Number of chosing school in the same district
 Ldatstu_matching_sss <- Ldatstu_matching %>% rename(schoolcode=schoice)
 Ldatstu_matching_sss <- merge(Ldatstu_matching_sss,datsss,by="schoolcode")
 datasame <- Ldatstu_matching_sss %>% group_by(V1.x) %>% summarise(same = jssdistrict[1] %in% sssdistrict)
 datasame$same <- as.numeric(datasame$same)
 Nsame <- sum(datasame$same)
 
+#Number of admitted student in each school
 Ldatstu_matching_sss_admit <- subset(Ldatstu_matching_sss,rankplace!=99)
 Ldatstu_matching_sss_admit <- subset(Ldatstu_matching_sss_admit,rankplace==school)
 Nadmit <- data.frame(table(Ldatstu_matching_sss_admit$schoolcode))
 Nadmit <- Nadmit %>% rename(schoolcode=Var1)
 Nadmit <- Nadmit %>% rename(Nadmit=Freq)
 
+#Cutoff
 lowscore <- Ldatstu_matching_sss_admit %>% group_by(schoolcode) %>% summarise(minscore=min(score))
 
+#Quality(meanscore)
 quality  <- Ldatstu_matching_sss_admit %>% group_by(schoolcode) %>% summarise(meanscore=mean(score))
-
+#============================================================================================
 #Exercise 2
+#============================================================================================
 Ldatstu_matching_sss_admit$choice <- paste(Ldatstu_matching_sss_admit$schoolcode,Ldatstu_matching_sss_admit$pchoice,sep = ' ')
 Ncadmit   <- data.frame(table(Ldatstu_matching_sss_admit$choice))
 Ncadmit   <- Ncadmit %>% rename(choice=Var1)
@@ -71,16 +81,18 @@ schooldataf <- merge(schooldataf,datsss,by='schoolcode')
 schooldata1 <- left_join(schooldataf,schooldata,by='choice')
 schooldata  <- subset(schooldata1,select = -c(9:15))
 schooldata  <- schooldata[is.na(schooldata)] <- 0
-
+#============================================================================================
 #Exercise 3
+#============================================================================================
 Ldatstu_matching_sss_jss <- merge(Ldatstu_matching_sss,datjss,by='jssdistrict')
 Ldatstu_matching_sss_jss <- Ldatstu_matching_sss_jss  %>% rename(jsslong = point_x)
 Ldatstu_matching_sss_jss <- Ldatstu_matching_sss_jss  %>% rename(jsslat  = point_y)
 attach(Ldatstu_matching_sss_jss)
 Ldatstu_matching_sss_jss$distance <- sqrt((69.172 * (ssslong-jsslong) * cos(jsslat/57.3))^2 + (69.172 * (ssslat-jsslat))^2)
 detach(Ldatstu_matching_sss_jss)
-
+#============================================================================================
 #Exercise 4
+#============================================================================================
 Ldatstu_matching_sss_jss$scode_rev <- str_sub(Ldatstu_matching_sss_jss$schoolcode, start = 1, end = 3)
 Ldatstu_matching_sss_jss$pchoice <- as_factor(Ldatstu_matching_sss_jss$pchoice) 
 Ldatstu_matching_sss_jss$pgm_rev <- Ldatstu_matching_sss_jss$pchoice %>% fct_collapse(arts = c("General Arts","Visual Arts"),economics = c("Business","Home Economics"),science="General Science",other_level = 'others')
@@ -88,27 +100,25 @@ levels(Ldatstu_matching_sss_jss$pgm_rev)
 
 Ldatstu_matching_sss_jss$choice_rev <- paste(Ldatstu_matching_sss_jss$scode_rev,Ldatstu_matching_sss_jss$pgm_rev,sep = ' ')
 
-
 lowscore_rev <- Ldatstu_matching_sss_jss %>% group_by(choice_rev) %>% summarise(minscore=min(score))
 quality_rev  <- Ldatstu_matching_sss_jss %>% group_by(choice_rev) %>% summarise(meanscore=mean(score))
 quality_rev$choice_rev <- as.factor(quality_rev$choice_rev)
 quality_rev$choice_rev <- as.numeric(quality_rev$choice_rev)
-
+#============================================================================================
 #Exercise 5 
+#============================================================================================
 Ldatstu_matching_sss_jss_first <- subset(Ldatstu_matching_sss_jss,school==1)
 Ldatstu_matching_sss_jss_first_high <- Ldatstu_matching_sss_jss_first[order(Ldatstu_matching_sss_jss_first$score,decreasing = TRUE), ] 
 sample <- Ldatstu_matching_sss_jss_first_high[1:20000,]
-sample$choice_rev <- as.factor(sample$choice_rev)
-sample$choice_rev <- as.numeric(sample$choice_rev)
-Nchoice_sample <- n_distinct(sample$choice_rev)
 
+#Choose a sample of size 100
 set.seed(1232)
 x <- sample(1:nrow(sample),100)
 small_sample <- sample[x,]
 small_sample$choice_rev <- as.factor(small_sample$choice_rev)
 small_sample$choice_rev <- as.numeric(small_sample$choice_rev)
-
-#Likelihood Function
+small_sample$choice_rev 
+#Likelihood Function for Multinomial Logit
 mlogit_like_fun = function(param,data)
 {
   score      =  data$score
@@ -138,40 +148,38 @@ mlogit_like_fun = function(param,data)
   like = sum(log(probc))
   return(-like)
 }
-
+#Number of choice in the small sample
 m <- n_distinct(small_sample$choice_rev)
-
-#Package Result
+#Package Results
 multinom_model <- multinom(choice_rev~score,data=small_sample,maxit=10000)
 sum <- summary(multinom_model)
 start_ideal <- c(sum$coefficients[,1],sum$coefficients[,2])
-marginal_effects(multinom_model)
-
+package_me1 <- marginal_effects(multinom_model)
 #Choose Starting Value
 set.seed(123)
 noise   = rnorm(78,0,0.05)
-start   = c(start_ideal,noise)
+start   = start_ideal+noise
 res1    = optim(start,fn=mlogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=small_sample,hessian=TRUE)
 par_m   = res1$par
-
-#Marginal Effect
-  #People-Choice Matrix
+#Marginal Effect 
+#People-Choice Matrix
 prob_matrix <- mat.or.vec(100,m)
 prob_matrix[,1] <- rep(0,100)
 par_constant<-par_m[1:39]
 par_score <- par_m[40:78]
+prob_matrix[,1] = par_constant[2-1] + small_sample$score*par_score[2-1]
 for (j in 2:m){
   prob_matrix[,j] = par_constant[j-1] + small_sample$score*par_score[j-1]
 }
 prob_matrix <- exp(prob_matrix)
 prob_matrix <- sweep(prob_matrix,MARGIN=1,FUN="/",STATS=rowSums(prob_matrix))
 colnames(prob_matrix) <- c(1:m)
-  #Match Pij
+#Match Pij
 small_sample$probc<-0
 for (i in 1:100){
   small_sample$probc[i] = prob_matrix[i,small_sample$choice_rev[i]]
 }
-  #Match coefficients
+#Match coefficients
 choice_rev  <- c(1:m)
 c_constant  <- c(0,par_m[1:m-1])
 c_score     <- c(0,par_m[m:78])
@@ -179,24 +187,32 @@ aa <- data.frame(cbind(choice_rev,c_constant))
 bb <- data.frame(cbind(choice_rev,c_score))
 small_sample <- merge(small_sample,aa,by='choice_rev')
 small_sample <- merge(small_sample,bb,by='choice_rev')
-  #Computation by formula
+#Computation by formula
 small_sample$beta_i_bar <- sum(small_sample$c_score * small_sample$probc)
 small_sample$me <- small_sample$probc*(small_sample$c_score - small_sample$beta_i_bar)
-package_me <- marginal_effects(multinom_model)
-
+#Likelihood for this model
+mlogit_like_fun(res1$par,small_sample)
+#============================================================================================
 #Exercise 6 
-small_sample_clogit <- merge(small_sample,quality_rev,by='choice_rev') 
+#============================================================================================
+#Get clogit dataset
+small_sample_clogit <- merge(small_sample,quality_rev,by='choice_rev')
+small_sample_clogit_long <-  small_sample_clogit %>% gather(c('choice_rev','meanscore'), key = 'school', value = 'schoice')
+
+#Log like function for conditional logit model
 clogit_like_fun = function(param,data){
   quality     =  data$meanscore
   ch          =  data$choice_rev
   ni = nrow(data)
   nj = length(unique(data[,1]))
   ut = mat.or.vec(ni,nj)
+  data_unique=distinct(data,choice_rev,.keep_all = TRUE)
+  quality_unique = data_unique[order(data_unique$choice_rev),]$meanscore
   # conditional logit
   pn1 = c(0,param[1:nj-1])
   for (j in 1:nj)
   {
-    ut[,j] = pn1[j] + param[nj]*quality 
+    ut[,j] = pn1[j] + param[nj] * quality_unique[j] 
   }
   prob  = exp(ut)       
   prob  = sweep(prob,MARGIN=1,FUN="/",STATS=rowSums(prob))
@@ -211,37 +227,34 @@ clogit_like_fun = function(param,data){
   like = sum(log(probc))
   return(-like)
 }
-
 #Package Results
-clogit_model <- clogit(choice_rev~meanscore+strata(V1.x),data=small_sample_clogit)
 
 #Optimization
 start_2 = runif(m,0,1)
 res2    = optim(start_2,fn=clogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=small_sample_clogit,hessian=TRUE)
 res2$par
-
+#Coefficients output
 co_constant <- c(0,res2$par[1:39])
 co_quality  <- res2$par[40]
-
-# Marginal Effects for Conditional Logit
+#Marginal Effects for Conditional Logit
+#People-choice Matrix
 prob_matrix_c <- mat.or.vec(100,m)
 for (j in 1:m){
   prob_matrix_c[,j] = co_constant[j] +  co_quality * small_sample_clogit$meanscore
 }
 prob_matrix_c <- exp(prob_matrix_c)
 prob_matrix_c <- sweep(prob_matrix_c,MARGIN=1,FUN="/",STATS=rowSums(prob_matrix_c))
- 
-small_sample_clogit$probc<-0
+#Match pij
+small_sample_clogit$probc <-0
 for (i in 1:100){
   small_sample_clogit$probc[i] = prob_matrix_c[i,small_sample_clogit$choice_rev[i]]
 }
-
+#Computing ME by formula
 probc1 <- unique(small_sample_clogit$probc)
-beta <- res2$par[40]
+beta <- res2$par[m]
 ME <- mat.or.vec(m,m)
-
-for (i in 1:40) {
-  for (j in 1:40) {
+for (i in 1:m) {
+  for (j in 1:m){
     if (i==j){
       ME[i,j]<-probc1[i]*(1-probc1[i])*beta
     }
@@ -249,6 +262,11 @@ for (i in 1:40) {
       ME[i,j]<-probc1[i]*(-1)*probc1[j]*beta}
   }
 }
+#Likelihood for this model
+clogit_like_fun(res2$par,small_sample_clogit)
+
+#============================================================================================
 #Exercise 7
+#============================================================================================
 
 
