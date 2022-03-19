@@ -124,7 +124,7 @@ mlogit_like_fun = function(param,data)
   score      =  data$score
   ch         =  data$choice_rev
   ni = nrow(data)
-  nj = length(unique(data[,22]))
+  nj = length(unique(ch))
   nj_par = nj-1
   ut = mat.or.vec(ni,nj)
   # multinomial logit
@@ -157,7 +157,7 @@ start_ideal <- c(sum$coefficients[,1],sum$coefficients[,2])
 package_me1 <- marginal_effects(multinom_model)
 #Choose Starting Value
 set.seed(123)
-noise   = rnorm(78,0,0.05)
+noise   = runif(78,-0.01,0.01)
 start   = start_ideal+noise
 res1    = optim(start,fn=mlogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=small_sample,hessian=TRUE)
 par_m   = res1$par
@@ -268,5 +268,4 @@ clogit_like_fun(res2$par,small_sample_clogit)
 #============================================================================================
 #Exercise 7
 #============================================================================================
-
 
