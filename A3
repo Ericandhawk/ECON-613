@@ -9,6 +9,7 @@ library(mlogit)
 library(survival)
 setwd('Downloads/Data') #for my macbook
 setwd('D:/ECON 613/A3/Data') # for my windows notebook
+options(scipen = 200)# No scientific notation
 #============================================================================================
 # Import Dataset
 #============================================================================================
@@ -163,6 +164,7 @@ par_m   = res1$par
 #Coefficients Output
 c_constant  <- c(0,par_m[1:m-1])
 c_score     <- c(0,par_m[m:78])
+coefficients_mlogit <- cbind(c_constant,c_score)
 #Marginal Effect 
 #People-Choice Matrix
 mlogit_prob_matrix = function(param,data)
@@ -194,8 +196,9 @@ for (i in 1:100) {
   beta_bar <- sum(prob_matrix[i,]*c_score)
   mlogit_me[i,]=prob_matrix[i,]*(c_score-beta_bar)
 }
-mlogit_me=apply(mlogit_me, 2, mean)
-mlogit_me
+mlogit_me <- apply(mlogit_me, 2, mean)
+mlogit_me <- as.data.frame(mlogit_me)
+colnames(mlogit_me)<-'me'
 #Likelihood for this model
 mlogit_like_fun(res1$par,small_sample)
 #============================================================================================
@@ -236,8 +239,10 @@ start_2 = runif(m,0,1)
 res2    = optim(start_2,fn=clogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=small_sample_clogit,hessian=TRUE)
 res2$par
 #Coefficients output
-co_constant <- c(0,res2$par[1:39])
+co_constant <- as.data.frame(c(0,res2$par[1:39]))
 co_quality  <- res2$par[40]
+colnames(co_constant) <- "co_constant"
+view(co_constant)
 #Marginal Effects for Conditional Logit
 #People-choice Matrix
 clogit_prob_matrix = function(param,data){
@@ -274,7 +279,8 @@ for (i in 1:100) {
   }
 }
 clogit_me=apply(clogit_me,c(2,3),mean)
-clogit_me
+colnames(clogit_me)<-c(1:40)
+view(clogit_me)
 #Likelihood for this model
 clogit_like_fun(res2$par,small_sample_clogit)
 #============================================================================================
