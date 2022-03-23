@@ -8,7 +8,7 @@ library(dplyr)
 library(nnet)
 library(mlogit)
 library(survival)
-setwd('Downloads/Econ 613/Data') #for my macbook
+setwd('Downloads/Data') #for my macbook
 setwd('D:/ECON 613/A3/Data') # for my windows notebook
 options(scipen = 200)# No scientific notation
 #============================================================================================
@@ -228,7 +228,8 @@ clogit_like_fun = function(param,data){
   return(-like)
 }
 #Optimization
-start_2 = runif(m,-0.5,0.5)
+set.seed(233)
+start_2 = runif(m,-1,1)
 res2    = optim(start_2,fn=clogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=small_sample_clogit,hessian=TRUE)
 res2$par
 #Coefficients output
@@ -277,3 +278,4 @@ view(clogit_me)
 #============================================================================================
 #Exercise 7
 #============================================================================================
+sample_noother <- subset(sample,pgm_rev != 'others')
