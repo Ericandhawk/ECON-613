@@ -1,3 +1,4 @@
+#Import libraries and basic settings
 library(Zelig)
 library(margins)
 library(readr)
@@ -16,15 +17,14 @@ options(scipen = 200)# No scientific notation
 datjss <- read_csv("datjss.csv")
 datsss <- read_csv("datsss.csv")
 datstu <- read_csv("datstu_v2.csv")
-datstu <- subset(datstu,score!='NA'&rankplace!='NA')
-datsss <- subset(datsss,schoolname!='NA')
 datsss <- datsss %>% distinct(schoolcode,.keep_all = TRUE)
 #============================================================================================
 #Exercise 1
 #============================================================================================
-#Numer of students, school, programs
+#Nubmer of students, school, programs
 Nstudent <- nrow(datstu) 
 Nschool  <- n_distinct(datsss$schoolcode)
+Nschool1 <- n_distinct(datsss$schoolname)
 programs <- c(datstu$choicepgm1,datstu$choicepgm2,datstu$choicepgm3,datstu$choicepgm4,datstu$choicepgm5,datstu$choicepgm6)
 programs <- na.omit(programs)
 Nprogram <- n_distinct(programs) 
@@ -74,13 +74,7 @@ schooldata <- merge(datsss,schooldata,by='schoolcode')
 schooldata <- merge(schooldata,Ncadmit,by='choice')
 schooldata <- merge(schooldata,clowscore,by='choice')
 schooldata <- merge(schooldata,cquality,by='choice')
-schooldataf <-data.frame(unique(Ldatstu_matching[c('schoice','pchoice')]))
-schooldataf$choice <- paste(schooldataf$schoice,schooldataf$pchoice,sep = ' ')
-schooldataf <- schooldataf %>% rename(schoolcode=schoice)
-schooldataf <- merge(schooldataf,datsss,by='schoolcode')
-schooldata1 <- left_join(schooldataf,schooldata,by='choice')
-schooldata  <- subset(schooldata1,select = -c(9:15))
-schooldata  <- schooldata[is.na(schooldata)] <- 0
+schooldata <- schooldata[,-3]
 #============================================================================================
 #Exercise 3
 #============================================================================================
@@ -93,13 +87,16 @@ detach(Ldatstu_matching_sss_jss)
 #============================================================================================
 #Exercise 4
 #============================================================================================
+#4.1
 Ldatstu_matching_sss_jss$scode_rev <- str_sub(Ldatstu_matching_sss_jss$schoolcode, start = 1, end = 3)
 Ldatstu_matching_sss_jss$pchoice <- as_factor(Ldatstu_matching_sss_jss$pchoice) 
 Ldatstu_matching_sss_jss$pgm_rev <- Ldatstu_matching_sss_jss$pchoice %>% fct_collapse(arts = c("General Arts","Visual Arts"),economics = c("Business","Home Economics"),science="General Science",other_level = 'others')
 levels(Ldatstu_matching_sss_jss$pgm_rev)
-
+#4.2
 Ldatstu_matching_sss_jss$choice_rev <- paste(Ldatstu_matching_sss_jss$scode_rev,Ldatstu_matching_sss_jss$pgm_rev,sep = ' ')
-
+#Remove NA in the dataset
+Ldatstu_matching_sss_jss <- subset(Ldatstu_matching_sss_jss,score!='NA'& rankplace!='NA')
+#4.3
 lowscore_rev <- Ldatstu_matching_sss_jss %>% group_by(choice_rev) %>% summarise(minscore=min(score))
 quality_rev  <- Ldatstu_matching_sss_jss %>% group_by(choice_rev) %>% summarise(meanscore=mean(score))
 quality_rev$choice_rev <- as.factor(quality_rev$choice_rev)
@@ -110,14 +107,15 @@ quality_rev$choice_rev <- as.numeric(quality_rev$choice_rev)
 Ldatstu_matching_sss_jss_first <- subset(Ldatstu_matching_sss_jss,school==1)
 Ldatstu_matching_sss_jss_first_high <- Ldatstu_matching_sss_jss_first[order(Ldatstu_matching_sss_jss_first$score,decreasing = TRUE), ] 
 sample <- Ldatstu_matching_sss_jss_first_high[1:20000,]
-
-#Choose a sample of size 100
+#Choose a sample of size 300 (I Tried with larger samples but waited too long to get a result.)
 set.seed(1232)
-x <- sample(1:nrow(sample),100)
+x <- sample(1:nrow(sample),300)
 small_sample <- sample[x,]
 small_sample$choice_rev <- as.factor(small_sample$choice_rev)
 small_sample$choice_rev <- as.numeric(small_sample$choice_rev)
 small_sample$choice_rev 
+#Number of choice in the small sample
+m <- n_distinct(small_sample$choice_rev)
 #Likelihood Function for Multinomial Logit
 mlogit_like_fun = function(param,data)
 {
@@ -148,22 +146,19 @@ mlogit_like_fun = function(param,data)
   like = sum(log(probc))
   return(-like)
 }
-#Number of choice in the small sample
-m <- n_distinct(small_sample$choice_rev)
 #Package Results
 multinom_model <- multinom(choice_rev~score,data=small_sample,maxit=10000)
 sum <- summary(multinom_model)
 start_ideal <- c(sum$coefficients[,1],sum$coefficients[,2])
-package_me1 <- marginal_effects(multinom_model)
 #Choose Starting Value
 set.seed(123)
-noise   = runif(78,-0.01,0.01)
+noise   = runif((m-1)*2,-0.02,0.02)
 start   = start_ideal+noise
 res1    = optim(start,fn=mlogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=small_sample,hessian=TRUE)
 par_m   = res1$par
 #Coefficients Output
 c_constant  <- c(0,par_m[1:m-1])
-c_score     <- c(0,par_m[m:78])
+c_score     <- c(0,par_m[m:(-2+2*m)])
 coefficients_mlogit <- cbind(c_constant,c_score)
 #Marginal Effect 
 #People-Choice Matrix
@@ -191,16 +186,14 @@ prob_matrix<-mlogit_prob_matrix(par_m,small_sample)
 prob_matrix
 colnames(prob_matrix) <- c(1:m)
 #Computation by formula
-mlogit_me=matrix(0,nrow=100, ncol=m)
-for (i in 1:100) {
+mlogit_me=matrix(0,nrow=300, ncol=m)
+for (i in 1:300) {
   beta_bar <- sum(prob_matrix[i,]*c_score)
   mlogit_me[i,]=prob_matrix[i,]*(c_score-beta_bar)
 }
 mlogit_me <- apply(mlogit_me, 2, mean)
 mlogit_me <- as.data.frame(mlogit_me)
 colnames(mlogit_me)<-'me'
-#Likelihood for this model
-mlogit_like_fun(res1$par,small_sample)
 #============================================================================================
 #Exercise 6 
 #============================================================================================
@@ -235,12 +228,12 @@ clogit_like_fun = function(param,data){
   return(-like)
 }
 #Optimization
-start_2 = runif(m,0,1)
+start_2 = runif(m,-0.5,0.5)
 res2    = optim(start_2,fn=clogit_like_fun,method="BFGS",control=list(trace=6,REPORT=1,maxit=10000),data=small_sample_clogit,hessian=TRUE)
 res2$par
 #Coefficients output
-co_constant <- as.data.frame(c(0,res2$par[1:39]))
-co_quality  <- res2$par[40]
+co_constant <- as.data.frame(c(0,res2$par[1:(m-1)]))
+co_quality  <- res2$par[m]
 colnames(co_constant) <- "co_constant"
 view(co_constant)
 #Marginal Effects for Conditional Logit
@@ -266,23 +259,21 @@ clogit_prob_matrix = function(param,data){
 #Pij Matrix for conditional logit
 prob_matrix_clogit <- clogit_prob_matrix(res2$par,small_sample_clogit)
 #Computing ME by formula
-deltaijk=array(0,dim = c(100,40,40))
-for (i in 1:100) {
+deltaijk=array(0,dim = c(300,m,m))
+for (i in 1:300) {
   diag(mid[i,,]) <- 1
 }
-clogit_me=array(0,dim=c(100,40,40))
-for (i in 1:100) {
-  for (j in 1:40) {
-    for (k in 1:40) {
+clogit_me=array(0,dim=c(300,m,m))
+for (i in 1:300) {
+  for (j in 1:m) {
+    for (k in 1:m) {
       clogit_me[i,j,k]=prob_matrix_clogit[i,j]*(deltaijk[i,j,k]-prob_matrix_clogit[i,k])*co_quality
     }
   }
 }
 clogit_me=apply(clogit_me,c(2,3),mean)
-colnames(clogit_me)<-c(1:40)
+colnames(clogit_me)<-c(1:m)
 view(clogit_me)
-#Likelihood for this model
-clogit_like_fun(res2$par,small_sample_clogit)
 #============================================================================================
 #Exercise 7
 #============================================================================================
