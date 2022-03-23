@@ -261,7 +261,7 @@ prob_matrix_clogit <- clogit_prob_matrix(res2$par,small_sample_clogit)
 #Computing ME by formula
 deltaijk=array(0,dim = c(300,m,m))
 for (i in 1:300) {
-  diag(mid[i,,]) <- 1
+  diag(deltaijk[i,,]) <- 1
 }
 clogit_me=array(0,dim=c(300,m,m))
 for (i in 1:300) {
