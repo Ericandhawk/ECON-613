@@ -8,7 +8,7 @@ library(dplyr)
 library(nnet)
 library(mlogit)
 library(survival)
-setwd('Downloads/Data') #for my macbook
+setwd('Downloads/Econ 613/Data') #for my macbook
 setwd('D:/ECON 613/A3/Data') # for my windows notebook
 options(scipen = 200)# No scientific notation
 #============================================================================================
