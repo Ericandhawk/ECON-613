@@ -33,23 +33,25 @@ c1 <- which(dat_a4$CV_HGC_BIO_DAD_1997==95)
 c2 <- which(dat_a4$CV_HGC_BIO_MOM_1997==95)
 c3 <- which(dat_a4$CV_HGC_RES_DAD_1997==95)
 c4 <- which(dat_a4$CV_HGC_BIO_MOM_1997==95)
-dat_a4$CV_HGC_BIO_DAD_1997[c1] <- 0
-dat_a4$CV_HGC_BIO_MOM_1997[c2] <- 0
-dat_a4$CV_HGC_RES_DAD_1997[c3] <- 0
-dat_a4$CV_HGC_BIO_MOM_1997[c4] <- 0
+dat_a4$CV_HGC_BIO_DAD_1997[c1] <- NA
+dat_a4$CV_HGC_BIO_MOM_1997[c2] <- NA
+dat_a4$CV_HGC_RES_DAD_1997[c3] <- NA
+dat_a4$CV_HGC_BIO_MOM_1997[c4] <- NA
 
 dat_a4$edu_bio <- rowSums(dat_a4[,8:9],na.rm = 'TRUE')
 dat_a4$edu_res <- rowSums(dat_a4[,10:11],na.rm = 'TRUE')
 #============================================================================================
 #Visualization 1.3.1
+dat_a4$age <- as.factor(dat_a4$age)
+dat_a4$KEY_SEX_1997 <- as.factor(dat_a4$KEY_SEX_1997)
+dat_a4$CV_BIO_CHILD_HH_U18_2019 <- as.factor(dat_a4$CV_BIO_CHILD_HH_U18_2019)
 dat_a4[,30][is.na(dat_a4[,30])] <- 0
 dat_a4_ig0 <- subset(dat_a4,dat_a4$YINC_1700_2019 > 0)
 income_age <- dat_a4_ig0 %>% group_by(age) %>% summarise(income = mean(YINC_1700_2019))
-income_age$age <- as.factor(income_age$age)
 income_gender <- dat_a4_ig0 %>% group_by(KEY_SEX_1997) %>% summarise(income = mean(YINC_1700_2019))
-income_gender$KEY_SEX_1997 <- as.factor(income_gender$KEY_SEX_1997)
+dat_a4_male <- subset(dat_a4,KEY_SEX_1997==1)
+dat_a4_female <- subset(dat_a4,KEY_SEX_1997==2)
 income_child <- dat_a4_ig0 %>% group_by(CV_BIO_CHILD_HH_U18_2019) %>% summarise(income = mean(YINC_1700_2019))
-income_child$CV_BIO_CHILD_HH_U18_2019 <- as.factor(income_child$CV_BIO_CHILD_HH_U18_2019)
 ggplot(income_age) +
   aes(x = age, weight = income) +
   geom_bar(fill = "#112446") +
@@ -59,6 +61,8 @@ ggplot(income_age) +
   ) +
   theme_light() +
   theme(plot.title = element_text(size = 15L, hjust = 0.5))
+hist(dat_a4_male$YINC_1700_2019)
+hist(dat_a4_female$YINC_1700_2019)
 ggplot(income_gender) +
   aes(x = KEY_SEX_1997, fill = KEY_SEX_1997, weight = income) +
   geom_bar() +
@@ -68,7 +72,7 @@ ggplot(income_gender) +
   ) +
   labs(
     y = "average income",
-    title = "Average income with gender"
+    title = "Average Income with Gender"
   ) +
   theme_light() +
   theme(plot.title = element_text(size = 15L))
@@ -91,30 +95,22 @@ ggplot(income_child) +
 #Visualization 1.3.2
 #============================================================================================
 s0_age <- dat_a4 %>% group_by(age) %>% summarize(s0=length(which((YINC_1700_2019==0)=='TRUE'))/length(YINC_1700_2019)) 
-s0_age$age <- as.factor(s0_age$age)
 s0_gender <- dat_a4 %>% group_by(KEY_SEX_1997) %>% summarize(s0=length(which((YINC_1700_2019==0)=='TRUE'))/length(YINC_1700_2019)) 
-s0_gender$KEY_SEX_1997 <- as.factor(s0_gender$KEY_SEX_1997)
-s0_child  <- dat_a4 %>% group_by(CV_BIO_CHILD_HH_U18_2019) %>% summarize(s0=length(which((YINC_1700_2019==0)=='TRUE'))/length(YINC_1700_2019))  
-s0_child$CV_BIO_CHILD_HH_U18_2019<- as.factor(s0_child$CV_BIO_CHILD_HH_U18_2019)
-ggplot(s0_age) +
+s0_child_marital <- dat_a4 %>% group_by(CV_BIO_CHILD_HH_U18_2019,CV_MARSTAT_COLLAPSED_2019) %>% summarize(s0=length(which((YINC_1700_2019==0)=='TRUE'))/length(YINC_1700_2019))  
+s0_child_marital <- subset(s0_child_marital,CV_BIO_CHILD_HH_U18_2019!='NA'&CV_MARSTAT_COLLAPSED_2019!='NA')
+s0_child_marital$status <- paste(s0_child_marital$CV_BIO_CHILD_HH_U18_2019,s0_child_marital$CV_MARSTAT_COLLAPSED_2019,sep = ',')
+ggplot(s0_age) 
   aes(x = age, fill = age, weight = s0) +
   geom_bar() +
   scale_fill_hue(direction = 1) +
   theme_minimal()
-ggplot(s0_child) +
-  aes(
-    x = CV_BIO_CHILD_HH_U18_2019,
-    fill = CV_BIO_CHILD_HH_U18_2019,
-    weight = s0
-  ) +
+  
+ggplot(s0_child_marital) +
+  aes(x = status, fill = status, weight = s0) +
   geom_bar() +
   scale_fill_hue(direction = 1) +
-  labs(
-    x = "number of child",
-    y = "share of 0",
-    fill = "number of child"
-  ) +
   theme_minimal()
+  
 ggplot(s0_gender) +
   aes(x = KEY_SEX_1997, fill = KEY_SEX_1997, weight = s0) +
   geom_bar() +
@@ -202,7 +198,31 @@ res_2 <- optim(reg_tobit$coefficients,fn=tobit_flike,method="BFGS",control=list(
 view(tobit)
 
 
+#Exercise 4
+dat_a4_panel <- read_csv("dat_A4_panel.csv")
+dat_a4_panel <- dat_a4_panel %>% rename(CV_HIGHEST_DEGREE_EVER_EDT_1998=CV_HIGHEST_DEGREE_9899_1998)
+dat_a4_panel <- dat_a4_panel %>% rename(CV_HIGHEST_DEGREE_EVER_EDT_1999=CV_HIGHEST_DEGREE_9900_1999)
+dat_a4_panel <- dat_a4_panel %>% rename(CV_HIGHEST_DEGREE_EVER_EDT_2000=CV_HIGHEST_DEGREE_0001_2000)
+dat_a4_panel <- dat_a4_panel %>% rename(CV_HIGHEST_DEGREE_EVER_EDT_2001=CV_HIGHEST_DEGREE_0102_2001)
+dat_a4_panel <- dat_a4_panel %>% rename(CV_HIGHEST_DEGREE_EVER_EDT_2002=CV_HIGHEST_DEGREE_0203_2002)
+dat_a4_panel <- dat_a4_panel %>% rename(CV_HIGHEST_DEGREE_EVER_EDT_2003=CV_HIGHEST_DEGREE_0304_2003)
+dat_a4_panel <- dat_a4_panel %>% rename(CV_HIGHEST_DEGREE_EVER_EDT_2004=CV_HIGHEST_DEGREE_0405_2004)
+dat_a4_panel <- dat_a4_panel %>% rename(CV_HIGHEST_DEGREE_EVER_EDT_2005=CV_HIGHEST_DEGREE_0506_2005)
+dat_a4_panel <- dat_a4_panel %>% rename(CV_HIGHEST_DEGREE_EVER_EDT_2006=CV_HIGHEST_DEGREE_0607_2006)
+dat_a4_panel <- dat_a4_panel %>% rename(CV_HIGHEST_DEGREE_EVER_EDT_2007=CV_HIGHEST_DEGREE_0708_2007)
+dat_a4_panel <- dat_a4_panel %>% rename(CV_HIGHEST_DEGREE_EVER_EDT_2008=CV_HIGHEST_DEGREE_0809_2008)
+dat_a4_panel <- dat_a4_panel %>% rename(CV_HIGHEST_DEGREE_EVER_EDT_2009=CV_HIGHEST_DEGREE_0910_2009)
+dat_a4_panel <- dat_a4_panel %>% rename(CV_HIGHEST_DEGREE_EVER_EDT_2010=CV_HIGHEST_DEGREE_1011_2010)
 
+dat_a4_panel_long <- long_panel(dat_a4_panel,prefix='_',begin  = 1997, end = 2019,label_location = "end")
+dat_a4_panel_long <- subset(dat_a4_panel_long,wave!='2012' & wave!='2014' & wave!='2016' & wave!='2018')
+dat_a4_panel_long <- select(dat_a4_panel_long,c(1:18,22:30))
+
+
+
+a<-dat_a4_panel_long[,c(10:16,20:27)]
+a[is.na(a[3:17])]<-0
+a$work_exp <- rowSums(a[,3:17])/48
 
 
 
