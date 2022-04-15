@@ -249,7 +249,7 @@ dat_a4_panel <- dat_a4_panel %>% rename(CV_HIGHEST_DEGREE_EVER_EDT_2009=CV_HIGHE
 dat_a4_panel <- dat_a4_panel %>% rename(CV_HIGHEST_DEGREE_EVER_EDT_2010=CV_HIGHEST_DEGREE_1011_2010)
 #============================================================================================
 #Convert Wide to Long
-dat_a4_panel_long <- long_panel(dat_a4_panel,prefix='_',begin  = 1997, end = 2019,label_location = "end")
+dat_a4_panel_long <- long_panel(dat_a4_panel, prefix='_', begin  = 1997, end = 2019, label_location = "end")
 dat_a4_panel_long <- subset(dat_a4_panel_long,wave!='2012' & wave!='2014' & wave!='2016' & wave!='2018')
 #============================================================================================
 #Create Experience and Age Variable
@@ -276,7 +276,7 @@ data$age <- as.numeric(data$age)
 data$KEY_SEX <- as.numeric(data$KEY_SEX)
 data$work_exp <- as.numeric(data$work_exp)
 data$CV_HIGHEST_DEGREE_EVER_EDT <- as.numeric(data$CV_HIGHEST_DEGREE_EVER_EDT)
-data$CV_MARSTAT_COLLAPSED <- as.factor(data$CV_MARSTAT_COLLAPSED)
+data$CV_MARSTAT_COLLAPSED <- as.numeric(data$CV_MARSTAT_COLLAPSED)
 
 minc <- data %>% group_by(id) %>% summarize(income=mean(`YINC-1700`,na.rm = TRUE))
 mage <- data %>% group_by(id) %>% summarize(age=mean(age,na.rm = TRUE))
@@ -285,28 +285,39 @@ mexper  <- data %>% group_by(id) %>% summarize(exper=mean(work_exp,na.rm = TRUE)
 medu <- data %>% group_by(id) %>% summarize(edu=mean(CV_HIGHEST_DEGREE_EVER_EDT,na.rm = TRUE))
 mms  <- data %>% group_by(id) %>% summarize(ms=mean(CV_MARSTAT_COLLAPSED,na.rm = TRUE))
 
-panel_between_estimator <- lm(minc$income~medu$edu+mexper$exper+mage$age+mgender$gender)
+panel_between_estimator <- lm(minc$income~medu$edu+mexper$exper+mms$ms)
+summary(panel_between_estimator)
 #============================================================================================
-#Within Estimator: gender/exper/edu/marital status
+#Within Estimator: exper/edu/marital status
 #============================================================================================
-data <- data %>% group_by(id) %>% mutate(income=mean(`YINC-1700`,na.rm = TRUE))
-data %>% group_by(id) %>% mutate(edu=mean(CV_HIGHEST_DEGREE_EVER_EDT,na.rm = TRUE))
+data$meanincome <- ave(data$`YINC-1700`, data$id, FUN=function(x)mean(x, na.rm=T))
+data$meanedu <- ave(data$CV_HIGHEST_DEGREE_EVER_EDT, data$id, FUN=function(x)mean(x, na.rm=T)) 
+data$meanexper <- ave(data$work_exp, data$id, FUN=function(x)mean(x, na.rm=T)) 
+data$meanms<- ave(data$CV_MARSTAT_COLLAPSED, data$id, FUN=function(x)mean(x, na.rm=T))
 
+data$d_income <- data$`YINC-1700` - data$meanincome
+data$d_edu <- data$CV_HIGHEST_DEGREE_EVER_EDT - data$meanedu
+data$d_exper <- data$work_exp - data$meanexper
+data$d_ms <- data$CV_MARSTAT_COLLAPSED - data$meanms
 
+panel_within_estimator <- lm(data$d_income~ data$d_edu + data$d_exper + data$d_ms)
+summary(panel_within_estimator)
+#============================================================================================
+#First Difference Estimator
+#============================================================================================
+data_43 <- select(data,id,wave,'YINC-1700',CV_HIGHEST_DEGREE_EVER_EDT,work_exp,CV_MARSTAT_COLLAPSED)
 
+data_43$first_income <- ave(data_43$`YINC-1700`, data$id, FUN=function(x)x[1])
+data_43$first_exper <- ave(data_43$CV_HIGHEST_DEGREE_EVER_EDT, data$id, FUN=function(x)x[1])
+data_43$first_edu <- ave(data_43$work_exp, data$id, FUN=function(x)x[1])
+data_43$first_ms <- ave(data_43$CV_MARSTAT_COLLAPSED, data$id, FUN=function(x)x[1])
 
+data_43$fd_income <- data_43$`YINC-1700` - data_43$first_income
+data_43$fd_exper  <- data_43$CV_HIGHEST_DEGREE_EVER_EDT - data_43$first_exper
+data_43$fd_edu    <- data_43$work_exp - data_43$first_edu
+data_43$fd_ms     <-data_43$CV_MARSTAT_COLLAPSED - data_43$first_ms
 
-
-
-
-
-
-
-
-
-
-
-
+panel_fd_estimator <- lm(fd_income~fd_exper+fd_edu+fd_ms,data_43)
 
 
 
