@@ -157,14 +157,12 @@ dat_a4_nna_ig0 <- subset(dat_a4_nna,dat_a4_nna$YINC_1700_2019 > 0)
 index <- which(dat_a4_nna$YINC_1700_2019 > 0)
 dat_a4_nna$d1 <- 0
 dat_a4_nna$d1[which(dat_a4_nna$YINC_1700_2019>0)] <- 1
-dat_a4_nna$inter <- 1
 
-p_x1 = dat_a4_nna$inter
-o_x1 = dat_a4_nna_ig0$inter
-p_x2 = as.numeric(dat_a4_nna$KEY_SEX_1997)
-o_x2 = as.numeric(dat_a4_nna_ig0$KEY_SEX_1997)
-p_x3 = as.numeric(dat_a4_nna$age)
-o_x3 = as.numeric(dat_a4_nna_ig0$age)
+dat_a4_nna$KEY_SEX_1997 = as.numeric(dat_a4_nna$KEY_SEX_1997)
+dat_a4_nna_ig0$KEY_SEX_1997 = as.numeric(dat_a4_nna_ig0$KEY_SEX_1997)
+dat_a4_nna$age = as.numeric(dat_a4_nna$age)
+dat_a4_nna_ig0$age = as.numeric(dat_a4_nna_ig0$age)
+
 p_x4 = dat_a4_nna$work_exp
 o_x4 = dat_a4_nna_ig0$work_exp
 p_x5 = dat_a4_nna$highest_degree_received
@@ -174,20 +172,20 @@ o_x6 = dat_a4_nna_ig0$CV_MARSTAT_COLLAPSED_2019
 y  = dat_a4_nna_ig0$YINC_1700_2019
 d1 = dat_a4_nna$d1
 #============================================================================================
-#OLS, Includes variables: age/gender/exper/edu/marital status
+#OLS, Includes variables: age/gender/exper/edu/edu for bio parents/marital status
 #============================================================================================
-ols_1 <- lm(y~o_x2+o_x3+o_x4+o_x5+o_x6,)
+ols_1 <- lm(YINC_1700_2019 ~ age + KEY_SEX_1997 + work_exp + highest_degree_received + CV_HGC_RES_DAD_1997 +  CV_HGC_RES_MOM_1997, data = dat_a4_nna_ig0)
 summary(ols_1)
 #Heckman Selection Model
 #============================================================================================
 #Step 1: Probit Estimation of Probability
-reg1 <- glm(d1~p_x2+p_x3+p_x4+p_x5+p_x6,family = binomial(link = "probit"),data = dat_a4)
+reg1 <- glm(d1~age+KEY_SEX_1997+work_exp+highest_degree_received+CV_HGC_RES_DAD_1997+CV_HGC_RES_MOM_1997,family = binomial(link = "probit"),data = dat_a4_nna)
 summary(reg1)
 #Inverse Mills Ratio
-imr <- dnorm(reg1$predictor)/pnorm(reg1$predictor)
+imr <- dnorm(reg1$linear.predictors)/pnorm(reg1$linear.predictors)
 imr <- imr[index]
 #Step 2: Include Inverse Mills Ratio as a Regressor
-ols_heckman <- lm(y~o_x2+o_x3+o_x4+o_x5+o_x6+imr)
+ols_heckman <- lm(YINC_1700_2019~age+KEY_SEX_1997+work_exp+highest_degree_received+CV_HGC_RES_DAD_1997+CV_HGC_RES_MOM_1997+imr, data = dat_a4_nna_ig0)
 summary(ols_heckman)
 #============================================================================================
 #Exercise 3
@@ -207,6 +205,7 @@ ggplot(dat_a4_ig0) +
 dat_a4_nna_ig0$d2 <- 0
 dat_a4_nna_ig0$d2[which(dat_a4_nna_ig0$YINC_1700_2019<100000)] <- 1
 d2 <- dat_a4_nna_ig0$d2
+#Package Results
 reg_tobit <- tobit(y ~ o_x2 + o_x3 + o_x4 + o_x5 + o_x6,left=-Inf,right = 100000)
 summary(reg_tobit)
 par <- as.vector(c(reg_tobit$coefficients,10.47996))
@@ -253,9 +252,8 @@ dat_a4_panel_long <- subset(dat_a4_panel_long,wave!='2012' & wave!='2014' & wave
 #============================================================================================
 #Work Experience
 dat_a4_panel_long <- select(dat_a4_panel_long,c(1:18,22:30))
-a<-as.matrix(dat_a4_panel_long[,c(10:16,20:27)])
+a<-as.data.frame(dat_a4_panel_long[,c(10:16,20:27)])
 a[is.na(a)]<-0
-a<-as.data.frame(a)
 for (i in 3:17) {
   a[,i]<-as.numeric(a[,i])
 }
@@ -285,18 +283,15 @@ data <- data %>% mutate(highest_degree_received = case_when(data$CV_HIGHEST_DEGR
                                                             data$CV_HIGHEST_DEGREE_EVER_EDT == 7 ~ "21"))
 data$highest_degree_received <- as.numeric(data$highest_degree_received)
 data <- na.omit(data)
-minc   <- data %>% group_by(id) %>% summarize(income=mean(`YINC-1700`,na.rm = TRUE))
-mexper <- data %>% group_by(id) %>% summarize(exper=mean(work_exp,na.rm = TRUE))
-medu   <- data %>% group_by(id) %>% summarize(edu=mean(highest_degree_received,na.rm = TRUE))
-mms    <- data %>% group_by(id) %>% summarize(ms=mean(CV_MARSTAT_COLLAPSED,NA.RM=TRUE))
 
-data_41 <- merge(minc,mexper,by='id')
-data_41 <- merge(data_41,medu,by='id')
-data_41 <- merge(data_41,mms,by='id')
-          
+data_41 <- data %>% group_by(id) %>% summarize(income=mean(`YINC-1700`,na.rm = TRUE),
+                                               exper=mean(work_exp,na.rm = TRUE),
+                                               edu=mean(highest_degree_received,na.rm = TRUE),
+                                               ms=mean(CV_MARSTAT_COLLAPSED,NA.RM=TRUE))
+#Estimate
 panel_between_estimator <- lm(income~edu+exper+ms, data = data_41)
 summary(panel_between_estimator)
-
+#Package Results
 try=plm(data$`YINC-1700` ~ highest_degree_received+work_exp+CV_MARSTAT_COLLAPSED,data=data,model = "between")
 summary(try)
 #============================================================================================
